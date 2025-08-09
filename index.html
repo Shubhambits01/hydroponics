@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HydroLab — Hydroponic Chemical Measurer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg1:#0f1724;
+      --bg2:#071029;
+      --glass: rgba(255,255,255,0.06);
+      --accent: #2ee6b6;
+      --muted: rgba(255,255,255,0.75);
+      --card-radius:16px;
+      --glass-2: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    html,body{height:100%;margin:0;color:#e6f0f2;background:linear-gradient(180deg,var(--bg1),var(--bg2));}
+    .wrap{max-width:1080px;margin:28px auto;padding:24px;}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#00d4a6,#2ee6b6);box-shadow:0 6px 18px rgba(46,230,182,0.15);display:flex;align-items:center;justify-content:center;font-weight:800;color:#022;letter-spacing:0.6px}
+    h1{margin:0;color:white;font-size:20px}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+
+    .grid{display:grid;grid-template-columns:1fr 420px;gap:18px;align-items:start}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));backdrop-filter:blur(8px);border-radius:var(--card-radius);padding:16px;box-shadow:0 8px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.04)}
+
+    /* left */
+    .controls{display:flex;flex-direction:column;gap:12px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input[type=number], input[type=text], select{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:white;font-size:14px}
+    .row{display:flex;gap:10px}
+    .row .col{flex:1}
+    .actions{display:flex;gap:8px;margin-top:8px}
+    button{padding:10px 12px;border-radius:10px;border:none;background:var(--accent);color:#063;cursor:pointer;font-weight:700}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:600}
+    button.warn{background:#ff6b6b;color:white}
+    .small{font-size:13px;padding:8px 10px}
+
+    /* right */
+    .meta{display:flex;flex-direction:column;gap:12px}
+    .chart-wrap{height:360px;padding:6px}
+    canvas{width:100% !important;height:100% !important}
+
+    .history{max-height:240px;overflow:auto;padding:8px;border-radius:8px;background:linear-gradient(180deg,var(--glass),var(--glass-2));}
+    .entry{padding:8px;border-radius:8px;margin-bottom:8px;background:linear-gradient(180deg,rgba(0,0,0,0.18),rgba(255,255,255,0.01));display:flex;justify-content:space-between;align-items:center}
+    .entry .left{font-size:13px}
+    .entry .right{font-size:13px;color:var(--muted)}
+
+    footer{margin-top:14px;color:var(--muted);font-size:13px;text-align:center}
+
+    /* responsive */
+    @media (max-width:980px){.grid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">HL</div>
+        <div>
+          <h1>HydroLab — Chemical Measurer</h1>
+          <p class="lead">Track water & nutrient quantities · beautiful charts · saved in your browser • made by Shubham Choudhary under the guidance of Nishant tripathi</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <select id="chartTypeSelect" title="Chart type">
+          <option value="line">Line</option>
+          <option value="bar">Bar</option>
+          <option value="radar">Radar</option>
+        </select>
+        <button id="exportBtn" class="small ghost">Export JSON</button>
+        <button id="importBtn" class="small ghost">Import</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="controls">
+          <div>
+            <label>Timestamp</label>
+            <input type="datetime-local" id="ts" />
+          </div>
+
+          <div class="row">
+            <div class="col">
+              <label>Water (L)</label>
+              <input type="number" id="water" step="0.01" min="0" placeholder="e.g. 10.5" />
+            </div>
+            <div class="col">
+              <label>pH</label>
+              <input type="number" id="ph" step="0.01" min="0" max="14" placeholder="e.g. 6.2" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col">
+              <label>Nitrate (mg/L)</label>
+              <input type="number" id="nitrate" step="0.1" min="0" placeholder="e.g. 120" />
+            </div>
+            <div class="col">
+              <label>Phosphate (mg/L)</label>
+              <input type="number" id="phosphate" step="0.1" min="0" placeholder="e.g. 30" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col">
+              <label>Potassium (mg/L)</label>
+              <input type="number" id="potassium" step="0.1" min="0" placeholder="e.g. 150" />
+            </div>
+            <div class="col">
+              <label>EC (mS/cm)</label>
+              <input type="number" id="ec" step="0.01" min="0" placeholder="e.g. 1.8" />
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="addBtn" class="small">Add Record</button>
+            <button id="clearBtn" class="small warn">Clear All</button>
+            <button id="sampleBtn" class="small ghost">Load Sample</button>
+          </div>
+
+          <div style="margin-top:6px">
+            <label>Add a custom chemical (name → value)</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="customName" placeholder="e.g. Calcium" />
+              <input type="number" id="customVal" step="0.1" placeholder="value" />
+              <button id="addCustom" class="small ghost">Add</button>
+            </div>
+            <div id="customList" style="margin-top:8px;color:var(--muted);font-size:13px"></div>
+          </div>
+
+        </div>
+      </section>
+
+      <aside class="card meta">
+        <div class="chart-wrap">
+          <canvas id="mainChart"></canvas>
+        </div>
+
+        <div>
+          <strong style="color:white">History</strong>
+          <div class="history" id="history"></div>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
+          <div style="color:var(--muted);font-size:13px">Records: <span id="count">0</span></div>
+          <div style="display:flex;gap:6px">
+            <button id="downloadCsv" class="small ghost">Download CSV</button>
+            <button id="resetView" class="small ghost">Reset View</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      Built for hydroponic monitoring — data saved locally in your browser (localStorage).
+    </footer>
+  </div>
+
+<script>
+// --- simple hydroponic measurer single-file app ---
+const STORAGE_KEY = 'hydrolab.records.v1';
+let records = [];
+let customChemicals = []; // array of {name}
+
+// elements
+const tsEl = document.getElementById('ts');
+const waterEl = document.getElementById('water');
+const phEl = document.getElementById('ph');
+const nitrateEl = document.getElementById('nitrate');
+const phosphateEl = document.getElementById('phosphate');
+const potassiumEl = document.getElementById('potassium');
+const ecEl = document.getElementById('ec');
+const addBtn = document.getElementById('addBtn');
+const clearBtn = document.getElementById('clearBtn');
+const sampleBtn = document.getElementById('sampleBtn');
+const historyEl = document.getElementById('history');
+const countEl = document.getElementById('count');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const chartTypeSelect = document.getElementById('chartTypeSelect');
+const downloadCsv = document.getElementById('downloadCsv');
+const resetView = document.getElementById('resetView');
+const addCustomBtn = document.getElementById('addCustom');
+const customNameEl = document.getElementById('customName');
+const customValEl = document.getElementById('customVal');
+const customListEl = document.getElementById('customList');
+
+// set default datetime now
+(function setNow(){
+  const d = new Date();
+  // set local datetime-local value
+  const tzoffset = d.getTimezoneOffset()*60000;
+  const localISOTime = (new Date(Date.now()-tzoffset)).toISOString().slice(0,16);
+  tsEl.value = localISOTime;
+})();
+
+// chart setup
+const ctx = document.getElementById('mainChart');
+let mainChart;
+function createChart(type='line'){
+  const config = {
+    type: type,
+    data: {labels:[], datasets:[]},
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{x:{ticks:{color:'#bcd7d0'}}, y:{ticks:{color:'#bcd7d0'}}},
+      plugins:{legend:{labels:{color:'#e6f0f2'}}}
+    }
+  };
+  if(mainChart) mainChart.destroy();
+  mainChart = new Chart(ctx, config);
+}
+createChart();
+
+// util - random color
+function randColor(i){
+  const palette = [
+    '#22c55e','#06b6d4','#f97316','#60a5fa','#a78bfa','#fb7185','#34d399','#fde68a'
+  ];
+  return palette[i % palette.length];
+}
+
+// load/save
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({records,customChemicals})); }
+function load(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
+    try{
+      const parsed = JSON.parse(raw);
+      records = parsed.records || [];
+      customChemicals = parsed.customChemicals || [];
+    }catch(e){records=[];customChemicals=[]}
+  } else {
+    records = []; customChemicals=[];
+  }
+}
+
+function renderHistory(){
+  historyEl.innerHTML='';
+  records.slice().reverse().forEach((r, idx)=>{
+    const div = document.createElement('div'); div.className='entry';
+    const left = document.createElement('div'); left.className='left';
+    left.innerHTML = `<div style="font-weight:700">${new Date(r.ts).toLocaleString()}</div>`;
+    const right = document.createElement('div'); right.className='right';
+    const vals = [];
+    vals.push(`W:${r.water ?? '-'}L`);
+    if(r.ph !== undefined) vals.push(`pH:${r.ph}`);
+    ['nitrate','phosphate','potassium','ec'].forEach(k=>{ if(r[k]!==undefined) vals.push(`${k}:${r[k]}`)});
+    if(r.custom){ Object.keys(r.custom).forEach(k=> vals.push(`${k}:${r.custom[k]}`)) }
+    right.textContent = vals.join(' · ');
+    div.appendChild(left); div.appendChild(right);
+    historyEl.appendChild(div);
+  });
+  countEl.textContent = records.length;
+}
+
+function buildDatasets(){
+  // labels are timestamps
+  const labels = records.map(r=> new Date(r.ts).toLocaleString());
+  const keys = ['water','ph','nitrate','phosphate','potassium','ec'];
+  // include custom chemicals dynamically
+  customChemicals.forEach(c=> keys.push(c.name));
+
+  const datasets = [];
+  keys.forEach((k,i)=>{
+    const data = records.map(r=>{
+      if(k in r) return r[k];
+      if(r.custom && k in r.custom) return r.custom[k];
+      return null;
+    });
+    // skip dataset if all values null
+    if(data.every(v=>v===null)) return;
+    datasets.push({
+      label: k,
+      data: data,
+      borderColor: randColor(i),
+      backgroundColor: randColor(i)+'33',
+      tension:0.2,
+      fill:false
+    });
+  });
+  return {labels,datasets};
+}
+
+function refreshChart(){
+  const {labels,datasets} = buildDatasets();
+  mainChart.data.labels = labels;
+  mainChart.data.datasets = datasets;
+  mainChart.update();
+}
+
+// add record
+addBtn.addEventListener('click', ()=>{
+  const ts = tsEl.value ? new Date(tsEl.value).toISOString() : new Date().toISOString();
+  const record = {ts};
+  if(waterEl.value) record.water = parseFloat(waterEl.value);
+  if(phEl.value) record.ph = parseFloat(phEl.value);
+  if(nitrateEl.value) record.nitrate = parseFloat(nitrateEl.value);
+  if(phosphateEl.value) record.phosphate = parseFloat(phosphateEl.value);
+  if(potassiumEl.value) record.potassium = parseFloat(potassiumEl.value);
+  if(ecEl.value) record.ec = parseFloat(ecEl.value);
+  // custom values
+  if(customChemicals.length){
+    record.custom = {};
+    customChemicals.forEach(c=>{
+      const el = document.getElementById('custom-input-'+c.name);
+      if(el && el.value) record.custom[c.name] = parseFloat(el.value);
+    });
+  }
+  records.push(record);
+  save(); renderHistory(); refreshChart();
+  // small flash
+  addBtn.textContent='Saved ✓'; setTimeout(()=>addBtn.textContent='Add Record',900);
+});
+
+clearBtn.addEventListener('click', ()=>{
+  if(!confirm('Clear all saved records?')) return;
+  records = []; customChemicals=[]; save(); renderHistory(); refreshChart(); renderCustomInputs();
+});
+
+sampleBtn.addEventListener('click', ()=>{
+  const now = Date.now();
+  records = [
+    {ts:new Date(now-1000*60*60*24*3).toISOString(), water:8.5, ph:5.9, nitrate:110, phosphate:28, potassium:140, ec:1.6},
+    {ts:new Date(now-1000*60*60*24*2).toISOString(), water:9.0, ph:6.0, nitrate:118, phosphate:30, potassium:145, ec:1.7},
+    {ts:new Date(now-1000*60*60*24*1).toISOString(), water:10.2, ph:6.1, nitrate:125, phosphate:32, potassium:150, ec:1.8}
+  ];
+  customChemicals = [];
+  save(); renderHistory(); refreshChart(); renderCustomInputs();
+});
+
+// export/import
+exportBtn.addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify({records,customChemicals},null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'hydrolab-data.json'; a.click(); URL.revokeObjectURL(url);
+});
+
+importBtn.addEventListener('click', ()=>{
+  const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
+  inp.onchange = e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      try{ const parsed = JSON.parse(ev.target.result); records = parsed.records||[]; customChemicals = parsed.customChemicals||[]; save(); renderHistory(); refreshChart(); renderCustomInputs(); alert('Imported'); }
+      catch(err){alert('Invalid file')}
+    };
+    reader.readAsText(f);
+  };
+  inp.click();
+});
+
+// csv download
+downloadCsv.addEventListener('click', ()=>{
+  if(!records.length){ alert('No records to export'); return; }
+  // build header
+  const customKeys = customChemicals.map(c=>c.name);
+  const headers = ['ts','water','ph','nitrate','phosphate','potassium','ec',...customKeys];
+  const rows = records.map(r=>{
+    return headers.map(h=>{
+      if(h==='ts') return r.ts;
+      if(['water','ph','nitrate','phosphate','potassium','ec'].includes(h)) return r[h] ?? '';
+      return (r.custom && r.custom[h]) ? r.custom[h] : '';
+    }).join(',');
+  });
+  const csv = [headers.join(','),...rows].join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='hydrolab-data.csv'; a.click(); URL.revokeObjectURL(url);
+});
+
+// reset view
+resetView.addEventListener('click', ()=>{
+  createChart(chartTypeSelect.value);
+  refreshChart();
+});
+
+// custom chemicals
+addCustomBtn.addEventListener('click', ()=>{
+  const name = (customNameEl.value || '').trim();
+  const val = customValEl.value;
+  if(!name){ alert('Enter a name for custom chemical'); return; }
+  // ensure unique
+  if(customChemicals.some(c=>c.name.toLowerCase()===name.toLowerCase())){ alert('Custom chemical already exists'); return; }
+  customChemicals.push({name});
+  // if a value provided, add to latest record
+  if(val){
+    const rec = {ts:new Date().toISOString(), custom:{[name]:parseFloat(val)}};
+    records.push(rec);
+  }
+  save(); renderCustomInputs(); renderHistory(); refreshChart();
+  customNameEl.value=''; customValEl.value='';
+});
+
+function renderCustomInputs(){
+  customListEl.innerHTML='';
+  const container = document.createElement('div');
+  customChemicals.forEach(c=>{
+    const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.gap='8px'; wrap.style.marginBottom='6px';
+    wrap.style.alignItems='center';
+    const label = document.createElement('div'); label.textContent = c.name; label.style.minWidth='90px'; label.style.color='var(--muted)';
+    const input = document.createElement('input'); input.type='number'; input.id = 'custom-input-'+c.name; input.placeholder='value'; input.step='0.1'; input.style.flex='1';
+    const rm = document.createElement('button'); rm.textContent='Remove'; rm.className='small ghost'; rm.onclick = ()=>{ if(confirm('Remove custom chemical '+c.name+' ?')){ customChemicals = customChemicals.filter(x=>x.name!==c.name); save(); renderCustomInputs(); refreshChart(); }};
+    wrap.appendChild(label); wrap.appendChild(input); wrap.appendChild(rm);
+    container.appendChild(wrap);
+  });
+  customListEl.appendChild(container);
+}
+
+// chart type change
+chartTypeSelect.addEventListener('change', ()=>{
+  createChart(chartTypeSelect.value);
+  refreshChart();
+});
+
+// initial load
+load();
+renderCustomInputs();
+renderHistory();
+refreshChart();
+
+// if there are no records, load a small sample invisibly
+if(records.length===0){
+  // do not automatically persist; show empty chart until user clicks sample or add
+}
+
+</script>
+</body>
+            </html>
+            
